@@ -1,0 +1,8 @@
+FROM pgvector/pgvector:pg16
+
+# Copy our schema initialization
+COPY init.sql /docker-entrypoint-initdb.d/
+
+# Set environment variables
+ENV POSTGRES_USER=app
+ENV POSTGRES_DB=appdb

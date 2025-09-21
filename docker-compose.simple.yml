@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # Event Processor API (uses Supabase + Upstash)
+  api:
+    build: .
+    environment:
+      # Supabase SESSION pooler URL
+      DATABASE_URL: "postgresql://postgres.ejkngjxuksrjazgutvvz:uIJHeeUhclhEZ9cU@aws-1-ap-south-1.pooler.supabase.com:5432/postgres"
+
+      # Local Redis URL (kept for local testing)
+      REDIS_URL: "rediss://default:AR0dAAImcDIxNWQ5Y2MxYzk3NWE0ZTUyYTc1NDNjZmVlOTFhODhhZHAyNzQ1Mw@relaxed-garfish-7453.upstash.io:6379"
+
+      # Upstash REST (so external agents can read agent_notifications)
+      UPSTASH_REDIS_REST_URL: "https://relaxed-garfish-7453.upstash.io"
+      UPSTASH_REDIS_REST_TOKEN: "AR0dAAImcDIxNWQ5Y2MxYzk3NWE0ZTUyYTc1NDNjZmVlOTFhODhhZHAyNzQ1Mw"
+
+      # existing envs
+      QUEUE_NAME: "events_queue"
+      HF_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
+      SENTENCE_TRANSFORMERS_HOME: "/models"
+    ports:
+      - "8000:8000"
+    command: ["python", "simplified_api.py"]
+    volumes:
+      - hf_cache:/models
+
+  # Worker/Processor (uses Supabase + Upstash)
+  worker:
+    build: .
+    environment:
+      DATABASE_URL: "postgresql://postgres.ejkngjxuksrjazgutvvz:uIJHeeUhclhEZ9cU@aws-1-ap-south-1.pooler.supabase.com:5432/postgres"
+      REDIS_URL: "rediss://default:AR0dAAImcDIxNWQ5Y2MxYzk3NWE0ZTUyYTc1NDNjZmVlOTFhODhhZHAyNzQ1Mw@relaxed-garfish-7453.upstash.io:6379"
+      QUEUE_NAME: "events_queue"
+      # Upstash REST (so external agents can read agent_notifications)
+      UPSTASH_REDIS_REST_URL: "https://relaxed-garfish-7453.upstash.io"
+      UPSTASH_REDIS_REST_TOKEN: "AR0dAAImcDIxNWQ5Y2MxYzk3NWE0ZTUyYTc1NDNjZmVlOTFhODhhZHAyNzQ1Mw"
+      HF_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
+      SENTENCE_TRANSFORMERS_HOME: "/models"
+      WINDOW_N: "60"
+      CACHE_TTL: "86400"
+    volumes:
+      - hf_cache:/models
+    command: ["python", "worker.py"]
+
+  # Local Redis (for testing; if you prefer Upstash, set REDIS_URL to your Upstash TLS URL)
+  redis:
+    image: redis:7
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  hf_cache:
